@@ -897,7 +897,7 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
 
 class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest):
 
-    def test_mixed_mv_latency(self):
+    def test_read_mv_latency(self):
         # next 3 lines, is a workaround to have it working inside `latency_calculator_decorator`
         self.cluster = self.db_cluster  # pylint: disable=attribute-defined-outside-init
         self.tester = self  # pylint: disable=attribute-defined-outside-init
@@ -908,23 +908,23 @@ class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
 
-        self.create_test_stats(sub_type="mixed", append_sub_test_to_name=False, test_index="mv-overloading-latency-mixed")
-        self.run_stress_thread(stress_cmd=self.params.get('stress_cmd_m'), stress_num=1,
+        self.create_test_stats(sub_type="read", append_sub_test_to_name=False, test_index="mv-overloading-latency-read")
+        self.run_stress_thread(stress_cmd=self.params.get('stress_cmd_r'), stress_num=1,
                                               stats_aggregate_cmds=False)
 
-        self.steady_state_mixed_workload_latency()  #stress_cmd_m
-        self.do_rewrite_workload() #stress_cmd_no_mv + #stress_cmd_m
-        self.wait_mv_cync() #stress_cmd_m
-        self.do_rewrite_workload_with_mv() #stress_cmd_mv + #stress_cmd_m
+        self.steady_state_read_workload_latency()  #stress_cmd_r
+        self.do_rewrite_workload() #stress_cmd_no_mv + #stress_cmd_r
+        self.wait_mv_sync() #stress_cmd_r
+        self.do_rewrite_workload_with_mv() #stress_cmd_mv + #stress_cmd_r
         self.loaders.kill_stress_thread()
         self.check_latency_during_ops()
 
 
     @latency_calculator_decorator
-    def steady_state_mixed_workload_latency(self):
-        InfoEvent(message='start_mixed_workload_latency begin').publish()
+    def steady_state_read_workload_latency(self):
+        InfoEvent(message='start_read_workload_latency begin').publish()
         time.sleep(15*60)
-        InfoEvent(message='start_mixed_workload_latency ended').publish()
+        InfoEvent(message='start_read_workload_latency ended').publish()
 
     @latency_calculator_decorator
     def do_rewrite_workload(self):
@@ -934,8 +934,20 @@ class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest
         self.display_results(results, test_name='do_rewrite_workload')
 
     @latency_calculator_decorator
-    def wait_mv_cync(self):
-        time.sleep(15*60)
+    def wait_mv_sync(self):
+        node_count = len(self.db_cluster.nodes)
+        node1 = self.db_cluster.nodes[0]
+        node1.run_cqlsh("CREATE TABLE IF NOT EXISTS scylla_bench.test (pk bigint,ck bigint,v blob,PRIMARY KEY(pk, ck)) WITH compression = { }")
+        node1.run_cqlsh("CREATE MATERIALIZED VIEW IF NOT EXISTS scylla_bench.view_test AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, pk, ck)")
+        start_time = time.time()
+        while True:
+            if time.time() - start_time > 15*60:
+                raise Exception("MV sync timeout")
+            result = node1.run_cqlsh("SELECT * FROM system_distributed.view_build_status WHERE keyspace_name = 'scylla_bench' AND view_name = 'view_test' AND status = 'SUCCESS' ALLOW FILTERING;")
+            if f"{node_count} rows" in result.stdout:
+                break
+            else:
+                time.sleep(10)
 
     @latency_calculator_decorator
     def do_rewrite_workload_with_mv(self):
