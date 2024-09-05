@@ -3,7 +3,7 @@ prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication
 ]
 
 stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=600m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=50 throttle=100/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..6250,3125,3125)' "
-stress_cmd_mv:  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=10000 -clustering-row-size=3 -concurrency=100 -max-rate=1500 -rows-per-request=1 -timeout=120s -connection-count 100  -consistency-level=quorum -iterations=0 -duration=60m"
+stress_cmd_mv:  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=20000 -clustering-row-size=3 -concurrency=100 -max-rate=2500 -rows-per-request=1 -timeout=120s -connection-count 100  -consistency-level=quorum -iterations=0 -duration=60m"
 
 
 post_prepare_cql_cmds: ["CREATE MATERIALIZED VIEW scylla_bench.view_test0 AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, ck, pk)",
