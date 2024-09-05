@@ -912,9 +912,8 @@ class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest
         self.run_stress_thread(stress_cmd=self.params.get('stress_cmd_m'), stress_num=1,
                                               stats_aggregate_cmds=False)
 
+        self.wait_mv_cync() #stress_cmd_m, views created after data preload
         self.steady_state_mixed_workload_latency()  #stress_cmd_m
-        self.do_rewrite_workload() #stress_cmd_no_mv + #stress_cmd_m
-        self.wait_mv_cync() #stress_cmd_m
         self.do_rewrite_workload_with_mv() #stress_cmd_mv + #stress_cmd_m
         self.loaders.kill_stress_thread()
         self.check_latency_during_ops()
@@ -927,19 +926,35 @@ class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest
         InfoEvent(message='start_mixed_workload_latency ended').publish()
 
     @latency_calculator_decorator
-    def do_rewrite_workload(self):
-        base_cmd = self.params.get('stress_cmd_no_mv')
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
-        results = self.get_stress_results(queue=stress_queue)
-        self.display_results(results, test_name='do_rewrite_workload')
-
-    @latency_calculator_decorator
     def wait_mv_cync(self):
-        time.sleep(15*60)
+        node_count = len(self.db_cluster.nodes)
+        node1 = self.db_cluster.nodes[0]
+        start_time = time.time()
+        while True:
+            if time.time() - start_time > 15*60:
+                raise Exception("MV sync timeout")
+            result = node1.run_cqlsh("SELECT * FROM system_distributed.view_build_status WHERE keyspace_name = 'scylla_bench'  AND status = 'SUCCESS' ALLOW FILTERING;")
+            if f"{node_count*10} rows" in result.stdout:
+                break
+            else:
+                time.sleep(10)
 
     @latency_calculator_decorator
     def do_rewrite_workload_with_mv(self):
+        start_time = time.time()
         base_cmd = self.params.get('stress_cmd_mv')
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
+        node1 = self.db_cluster.nodes[0]
+        while True:
+            time_to_sleep = min(300, 60*60 - (time.time() - start_time) - 600)
+            if time_to_sleep < 0:
+                break
+            time.sleep(time_to_sleep)
+            with self.db_cluster.cql_connection_patient(node1) as session:
+                try:
+                    session.execute(f"DELETE FROM scylla_bench.test WHERE pk IN {tuple([*range(100)])} USING TIMEOUT 10m", timeout=600)
+                except Exception as e:
+                    self.log.debug(f"Failed to delete data from base table: {str(e)}")
+                    raise
         results = self.get_stress_results(queue=stress_queue)
         self.display_results(results, test_name='do_rewrite_workload_with_mv')

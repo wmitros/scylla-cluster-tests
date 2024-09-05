@@ -1,0 +1,39 @@
+test_duration: 680
+prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=100 -clustering-row-size=3 -concurrency=100 -rows-per-request=1 -timeout=30s -connection-count 100  -consistency-level=quorum",
+]
+
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=600m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=50 throttle=100/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..6250,3125,3125)' "
+stress_cmd_mv:  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=10000 -clustering-row-size=3 -concurrency=100 -max-rate=1500 -rows-per-request=1 -timeout=120s -connection-count 100  -consistency-level=quorum -iterations=0 -duration=60m"
+
+
+post_prepare_cql_cmds: ["CREATE MATERIALIZED VIEW scylla_bench.view_test0 AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, ck, pk)",
+                        "CREATE MATERIALIZED VIEW scylla_bench.view_test1 AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, ck, pk)",
+                        "CREATE MATERIALIZED VIEW scylla_bench.view_test2 AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, ck, pk)",
+                        "CREATE MATERIALIZED VIEW scylla_bench.view_test3 AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, ck, pk)",
+                        "CREATE MATERIALIZED VIEW scylla_bench.view_test4 AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, ck, pk)",
+                        "CREATE MATERIALIZED VIEW scylla_bench.view_test5 AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, ck, pk)",
+                        "CREATE MATERIALIZED VIEW scylla_bench.view_test6 AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, ck, pk)",
+                        "CREATE MATERIALIZED VIEW scylla_bench.view_test7 AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, ck, pk)",
+                        "CREATE MATERIALIZED VIEW scylla_bench.view_test8 AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, ck, pk)",
+                        "CREATE MATERIALIZED VIEW scylla_bench.view_test9 AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, ck, pk)"]
+
+n_db_nodes: 4
+n_loaders: 2
+n_monitor_nodes: 1
+
+instance_type_loader: 'c5.2xlarge'
+instance_type_monitor: 't3.large'
+instance_type_db: 'i4i.2xlarge'
+
+user_prefix: 'perf-latency-mv-partition-deletes'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: false
+print_kernel_callstack: true
+
+store_perf_results: true
+use_prepared_loaders: true
+use_hdr_cs_histogram: true
+custom_es_index: 'mv-overloading-latency-mixed'
