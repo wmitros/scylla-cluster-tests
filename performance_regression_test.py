@@ -952,7 +952,7 @@ class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest
             time.sleep(time_to_sleep)
             with self.db_cluster.cql_connection_patient(node1) as session:
                 try:
-                    session.execute(f"DELETE FROM scylla_bench.test WHERE pk IN {tuple([*range(100)])} USING TIMEOUT 10m", timeout=600)
+                    session.execute(f"DELETE FROM scylla_bench.test USING TIMEOUT 10m WHERE pk IN {tuple([*range(100)])}", timeout=600)
                 except Exception as e:
                     self.log.debug(f"Failed to delete data from base table: {str(e)}")
                     raise
