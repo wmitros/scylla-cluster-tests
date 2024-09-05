@@ -946,7 +946,7 @@ class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
         node1 = self.db_cluster.nodes[0]
         while True:
-            time_to_sleep = min(300, 60*60 - (time.time() - start_time) - 600)
+            time_to_sleep = min(400, 60*60 - (time.time() - start_time) - 600)
             if time_to_sleep < 0:
                 break
             time.sleep(time_to_sleep)
