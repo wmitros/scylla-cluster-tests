@@ -963,53 +963,108 @@ class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest
     6- do special rewrite workload for table 1 again - measure latency for table 2 (while changing for table 1 applying ) (stress_cmd_mv)
     """
 
-    def test_read_mv_latency(self):
-        self.run_fstrim_on_all_db_nodes()
-        self.preload_data()  # prepare_write_cmd
-        self.wait_no_compactions_running()
-        self.run_fstrim_on_all_db_nodes()
+    # def test_read_mv_latency(self):
+    #     self.run_fstrim_on_all_db_nodes()
+    #     self.preload_data()  # prepare_write_cmd
+    #     self.wait_no_compactions_running()
+    #     self.run_fstrim_on_all_db_nodes()
 
-        self.create_test_stats(sub_type="read", append_sub_test_to_name=False, test_index="mv-overloading-latency-read")
-        stress_queue = self.run_stress_thread(
-            stress_cmd=self.params.get('stress_cmd_r'), stress_num=1, stats_aggregate_cmds=False)
+    #     self.create_test_stats(sub_type="read", append_sub_test_to_name=False, test_index="mv-overloading-latency-read")
+    #     stress_queue = self.run_stress_thread(
+    #         stress_cmd=self.params.get('stress_cmd_r'), stress_num=1, stats_aggregate_cmds=False)
 
-        self.steady_state_read_workload_latency(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_r
-        self.do_rewrite_workload(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_no_mv + #stress_cmd_r
-        self.wait_mv_sync(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_r
-        self.do_rewrite_workload_with_mv(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_mv + #stress_cmd_r
-        self.loaders.kill_stress_thread()
-        self.check_latency_during_ops(hdr_tags=stress_queue.hdr_tags)
+    #     self.steady_state_read_workload_latency(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_r
+    #     self.do_rewrite_workload(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_no_mv + #stress_cmd_r
+    #     self.wait_mv_sync(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_r
+    #     self.do_rewrite_workload_with_mv(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_mv + #stress_cmd_r
+    #     self.loaders.kill_stress_thread()
+    #     self.check_latency_during_ops(hdr_tags=stress_queue.hdr_tags)
 
-    @latency_calculator_decorator
-    def steady_state_read_workload_latency(self, hdr_tags: list[str]):
-        # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
-        InfoEvent(message='start_read_workload_latency begin').publish()
-        time.sleep(15*60)
-        InfoEvent(message='start_read_workload_latency ended').publish()
+#     @latency_calculator_decorator
+#     def steady_state_read_workload_latency(self, hdr_tags: list[str]):
+#         # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
+#         InfoEvent(message='start_read_workload_latency begin').publish()
+#         time.sleep(15*60)
+#         InfoEvent(message='start_read_workload_latency ended').publish()
 
-    @latency_calculator_decorator
-    def do_rewrite_workload(self, hdr_tags: list[str]):
-        # NOTE: 'latency_calculator_decorator' was designed to use exactly main stress hdr file info here.
-        # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
-        base_cmd = self.params.get('stress_cmd_no_mv')
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
-        results = self.get_stress_results(queue=stress_queue, store_results=False)
-        self.display_results(results, test_name='do_rewrite_workload')
+#     @latency_calculator_decorator
+#     def do_rewrite_workload(self, hdr_tags: list[str]):
+#         # NOTE: 'latency_calculator_decorator' was designed to use exactly main stress hdr file info here.
+#         # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
+#         base_cmd = self.params.get('stress_cmd_no_mv')
+#         stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
+#         results = self.get_stress_results(queue=stress_queue, store_results=False)
+#         self.display_results(results, test_name='do_rewrite_workload')
 
-    @latency_calculator_decorator
-    def wait_mv_sync(self, hdr_tags: list[str]):
-        # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
+    def wait_mv_sync(self):
         node1 = self.db_cluster.nodes[0]
         node1.run_cqlsh(
             "CREATE TABLE IF NOT EXISTS scylla_bench.test (pk bigint,ck bigint,v blob,PRIMARY KEY(pk, ck)) WITH compression = { }")
         node1.run_cqlsh("CREATE MATERIALIZED VIEW IF NOT EXISTS scylla_bench.view_test AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, pk, ck)")
         wait_for_view_to_be_built(node1, 'scylla_bench', 'view_test', timeout=1000)
 
-    @latency_calculator_decorator
-    def do_rewrite_workload_with_mv(self, hdr_tags: list[str]):
-        # NOTE: 'latency_calculator_decorator' was designed to use exactly main stress hdr file info here.
-        # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
-        base_cmd = self.params.get('stress_cmd_mv')
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
-        results = self.get_stress_results(queue=stress_queue, store_results=False)
-        self.display_results(results, test_name='do_rewrite_workload_with_mv')
+#     @latency_calculator_decorator
+#     def do_rewrite_workload_with_mv(self, hdr_tags: list[str]):
+#         # NOTE: 'latency_calculator_decorator' was designed to use exactly main stress hdr file info here.
+#         # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
+#         base_cmd = self.params.get('stress_cmd_mv')
+#         stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
+#         results = self.get_stress_results(queue=stress_queue, store_results=False)
+#         self.display_results(results, test_name='do_rewrite_workload_with_mv')
+
+    def test_prune_speed(self):
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()  # prepare_write_cmd
+        self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
+        self.create_test_stats(sub_type="write", append_sub_test_to_name=False, test_index="mv-overloading-latency-write")
+        self.wait_mv_sync()
+        self.do_prune()
+        self.loaders.kill_stress_thread()
+
+#     @latency_calculator_decorator
+#     def steady_state_write_workload_latency(self, hdr_tags: list[str]):
+#         # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
+#         InfoEvent(message='start_write_workload_latency begin').publish()
+#         time.sleep(15*60)
+#         InfoEvent(message='start_write_workload_latency ended').publish()
+
+    def do_prune(self):
+        node1 = self.db_cluster.nodes[0]
+        query = "PRUNE MATERIALIZED VIEW scylla_bench.view_test USING CONCURRENCY {} AND TIMEOUT 10h"
+        with self.db_cluster.cql_connection_patient(node1) as session:
+            try:
+                start_time = time.time()
+                session.execute(SimpleStatement(query.format(1)), timeout=36000)
+                total_time = time.time() - start_time
+                self.log.info(f"Prune MV with concurrency 1 took total {total_time} seconds")
+            except Exception as e:
+                self.log.info(f"Failed to delete data from base table: {str(e)}")
+                raise
+        with self.db_cluster.cql_connection_patient(node1) as session:
+            try:
+                start_time = time.time()
+                session.execute(SimpleStatement(query.format(2)), timeout=36000)
+                total_time = time.time() - start_time
+                self.log.info(f"Prune MV with concurrency 2 took total {total_time} seconds")
+            except Exception as e:
+                self.log.info(f"Failed to delete data from base table: {str(e)}")
+                raise
+        with self.db_cluster.cql_connection_patient(node1) as session:
+            try:
+                start_time = time.time()
+                session.execute(SimpleStatement(query.format(10)), timeout=36000)
+                total_time = time.time() - start_time
+                self.log.info(f"Prune MV with concurrency 10 took total {total_time} seconds")
+            except Exception as e:
+                self.log.info(f"Failed to delete data from base table: {str(e)}")
+                raise
+        with self.db_cluster.cql_connection_patient(node1) as session:
+            try:
+                start_time = time.time()
+                session.execute(SimpleStatement(query.format(100)), timeout=36000)
+                total_time = time.time() - start_time
+                self.log.info(f"Prune MV with concurrency 100 took total {total_time} seconds")
+            except Exception as e:
+                self.log.info(f"Failed to delete data from base table: {str(e)}")
+                raise
