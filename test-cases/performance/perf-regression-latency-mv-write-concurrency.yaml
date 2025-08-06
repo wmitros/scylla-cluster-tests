@@ -1,0 +1,26 @@
+test_duration: 680
+prepare_write_cmd: ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -partition-offset=100 -clustering-row-count=100000 -clustering-row-size=uniform:100..5120 -concurrency=500 -rows-per-request=10 -timeout=30s -connection-count 500  -consistency-level=all"]
+
+stress_cmd_w: "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -partition-offset=0 -clustering-row-count=100000 -clustering-row-size=uniform:100..5120 -concurrency=500 -max-rate=4000 -rows-per-request=1 -timeout=30s -connection-count 500 -consistency-level=quorum -iterations=0 -duration=75m"
+
+n_db_nodes: 3
+n_loaders: 2
+
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.large'
+instance_type_db: 'i4i.2xlarge'
+
+user_prefix: 'perf-latency-mv-overloaded'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: false
+
+store_perf_results: true
+use_prepared_loaders: true
+use_hdrhistogram: true
+custom_es_index: 'mv-overloading-latency-write'
+
+adaptive_timeout_store_metrics: false

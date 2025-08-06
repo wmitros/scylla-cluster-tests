@@ -1013,3 +1013,48 @@ class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue, store_results=False)
         self.display_results(results, test_name='do_rewrite_workload_with_mv')
+
+    def test_write_mv_latency(self):
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()  # prepare_write_cmd
+        self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
+
+        self.create_test_stats(sub_type="write", append_sub_test_to_name=False, test_index="mv-overloading-latency-write")
+        stress_queue = self.run_stress_thread(
+            stress_cmd=self.params.get('stress_cmd_w'), stress_num=1, stats_aggregate_cmds=False)
+
+        self.wait_mv_sync(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_w
+        self.steady_state_write_workload_latency(hdr_tags=stress_queue.hdr_tags)  # stress_cmd_w + mvs
+        self.do_rewrite_workload_with_mv_and_partition_deletes(hdr_tags=stress_queue.hdr_tags, stress_queue=stress_queue)  # stress_cmd_w + mvs + partition deletes
+        self.loaders.kill_stress_thread()
+        self.check_latency_during_ops(hdr_tags=stress_queue.hdr_tags)
+
+    @latency_calculator_decorator
+    def steady_state_write_workload_latency(self, hdr_tags: list[str]):
+        # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
+        InfoEvent(message='start_write_workload_latency begin').publish()
+        time.sleep(15*60)
+        InfoEvent(message='start_write_workload_latency ended').publish()
+
+    @latency_calculator_decorator
+    def do_rewrite_workload_with_mv_and_partition_deletes(self, hdr_tags: list[str], stress_queue):
+        start_time = time.time()
+        node1 = self.db_cluster.nodes[0]
+        test_time = 60 * 60
+        time_to_sleep = 360
+        i = 100
+        while True:
+            with self.db_cluster.cql_connection_patient(node1) as session:
+                try:
+                    session.execute(f"DELETE FROM scylla_bench.test USING TIMEOUT 360s WHERE pk IN {tuple([*range(i, i+10)])}", timeout=360)
+                except Exception as e:
+                    self.log.debug(f"Failed to delete data from base table: {str(e)}")
+                    raise
+            i += 10
+            time_until_end = test_time - (time.time() - start_time)
+            if time_until_end < time_to_sleep:
+                break
+            time.sleep(time_to_sleep)
+        results = self.get_stress_results(queue=stress_queue, store_results=False)
+        self.display_results(results, test_name='do_rewrite_workload_with_mv_and_partition_deletes')
